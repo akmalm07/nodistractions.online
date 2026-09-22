@@ -2,7 +2,7 @@
 
 The workflow at `.github/workflows/ci.yml` tests every pull request and push. A push to `main` deploys the backend only after the Go and frontend jobs succeed. The frontend is built and tested, but it needs a separate static host or Cloud Run service if you want it deployed too.
 
-The workflow uses GitHub OIDC and Google Workload Identity Federation (WIF), not a downloaded service-account key. Restrict the federation provider to the exact GitHub repository and `main` branch.
+The workflow uses GitHub OIDC and Google Workload Identity Federation (WIF), not a downloaded service-account key. Restrict the federation provider to the exact GitHub repository. The workflow itself only deploys on pushes to `main`.
 
 ## 1. Create the Google Cloud resources
 
@@ -84,7 +84,7 @@ gcloud iam workload-identity-pools providers create-oidc github \
   --workload-identity-pool=github \
   --issuer-uri="https://token.actions.githubusercontent.com" \
   --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
-  --attribute-condition="assertion.repository == '$GITHUB_REPOSITORY' && assertion.ref == 'refs/heads/main'"
+  --attribute-condition="assertion.repository == '$GITHUB_REPOSITORY'"
 
 export WIF_PROVIDER="$(gcloud iam workload-identity-pools providers describe github \
   --location=global --workload-identity-pool=github --format='value(name)')"
