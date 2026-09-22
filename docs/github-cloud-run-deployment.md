@@ -94,18 +94,8 @@ gcloud iam service-accounts add-iam-policy-binding "$DEPLOYER_SERVICE_ACCOUNT" \
   --member="principalSet://iam.googleapis.com/$WIF_POOL/attribute.repository/$GITHUB_REPOSITORY"
 ```
 
-## 5. Add GitHub Actions variables
+## 5. Push the workflow
 
-In **GitHub → Settings → Secrets and variables → Actions → Variables**, set these values:
+This configured project already includes its Google Cloud resource identifiers in `.github/workflows/ci.yml`, so no GitHub Actions variables are required. If you fork the project or change any Cloud resource, update those non-secret identifiers in that workflow. Do not store the dotenv payload or database URLs in GitHub.
 
-| Variable | Example value |
-| --- | --- |
-| `GCP_PROJECT_ID` | `your-gcp-project-id` |
-| `GCP_REGION` | `us-central1` |
-| `CLOUD_RUN_SERVICE` | `nodistractions-api` |
-| `CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT` | `nodistractions-runtime@your-gcp-project-id.iam.gserviceaccount.com` |
-| `ARTIFACT_REGISTRY_REPOSITORY` | `containers` |
-| `WORKLOAD_IDENTITY_PROVIDER` | full value of `WIF_PROVIDER` |
-| `DEPLOYER_SERVICE_ACCOUNT` | `github-deployer@your-gcp-project-id.iam.gserviceaccount.com` |
-
-After that configuration, every successful push to `main` reads the dotenv configuration from Secret Manager, runs the database migration, pushes an immutable image tagged with the commit SHA, and updates the Cloud Run backend. Configure Cloud Run ingress and unauthenticated access separately; the workflow intentionally does not change that security policy.
+Every successful push to `main` reads the dotenv configuration from Secret Manager, runs the database migration, pushes an immutable image tagged with the commit SHA, and updates the Cloud Run backend. Configure Cloud Run ingress and unauthenticated access separately; the workflow intentionally does not change that security policy.

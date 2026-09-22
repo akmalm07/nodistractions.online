@@ -56,13 +56,13 @@ jobs:
       contents: read
       id-token: write
     env:
-      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-      GCP_REGION: ${{ vars.GCP_REGION }}
-      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
-      CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
-      ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}
-      WORKLOAD_IDENTITY_PROVIDER: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
-      DEPLOYER_SERVICE_ACCOUNT: ${{ vars.DEPLOYER_SERVICE_ACCOUNT }}
+      GCP_PROJECT_ID: nodistractions-online
+      GCP_REGION: us-east4
+      CLOUD_RUN_SERVICE: nodistractions-api
+      CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT: nodistractions-api@nodistractions-online.iam.gserviceaccount.com
+      ARTIFACT_REGISTRY_REPOSITORY: containers
+      WORKLOAD_IDENTITY_PROVIDER: projects/933874694474/locations/global/workloadIdentityPools/github/providers/github
+      DEPLOYER_SERVICE_ACCOUNT: github-deployer@nodistractions-online.iam.gserviceaccount.com
 
     steps:
       - uses: actions/checkout@v5
@@ -70,27 +70,13 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
-      - name: Check deployment configuration
-        shell: bash
-        run: |
-          required=(
-            GCP_PROJECT_ID GCP_REGION CLOUD_RUN_SERVICE
-            CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT ARTIFACT_REGISTRY_REPOSITORY
-            WORKLOAD_IDENTITY_PROVIDER DEPLOYER_SERVICE_ACCOUNT
-          )
-          for name in "${required[@]}"; do
-            if [[ -z "${!name}" ]]; then
-              echo "Missing GitHub Actions variable: ${name}" >&2
-              exit 1
-            fi
-          done
       - id: auth
         name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_SERVICE_ACCOUNT }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
       - name: Run Neon migration
