@@ -1,0 +1,12 @@
+{
+  "projectName": "nodistractions-online",
+  "backend": "go",
+  "frontend": "react",
+  "database": "neon",
+  "storage": "gcs",
+  "email": "twilio",
+  "billing": false,
+  "organizations": true,
+  "docker": true,
+  "install": false
+}

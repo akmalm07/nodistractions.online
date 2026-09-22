@@ -1,0 +1,119 @@
+name: CI and deploy backend
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Test backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Vet Go code
+        working-directory: backend
+        run: go vet ./...
+      - name: Test Go code
+        working-directory: backend
+        run: go test ./...
+
+  frontend:
+    name: Test frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Test frontend
+        working-directory: frontend
+        run: npm run test
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  deploy-backend:
+    name: Migrate and deploy Cloud Run
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
+      ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}
+      WORKLOAD_IDENTITY_PROVIDER: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+      DEPLOYER_SERVICE_ACCOUNT: ${{ vars.DEPLOYER_SERVICE_ACCOUNT }}
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Check deployment configuration
+        shell: bash
+        run: |
+          required=(
+            GCP_PROJECT_ID GCP_REGION CLOUD_RUN_SERVICE
+            CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT ARTIFACT_REGISTRY_REPOSITORY
+            WORKLOAD_IDENTITY_PROVIDER DEPLOYER_SERVICE_ACCOUNT
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing GitHub Actions variable: ${name}" >&2
+              exit 1
+            fi
+          done
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SERVICE_ACCOUNT }}
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Run Neon migration
+        working-directory: backend
+        shell: bash
+        env:
+          ENV_MODE: "true"
+          SECRET_MANAGER_SECRET: projects/933874694474/locations/us-east4/secrets/nodistractions-secrets
+        run: go run ./cmd/migrate
+      - name: Configure Artifact Registry authentication
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+      - name: Build and push backend image
+        shell: bash
+        run: |
+          IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/${CLOUD_RUN_SERVICE}:${GITHUB_SHA}"
+          docker build --tag "$IMAGE" backend
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+      - name: Deploy backend to Cloud Run
+        run: |
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "$IMAGE" \
+            --service-account "$CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT" \
+            --quiet

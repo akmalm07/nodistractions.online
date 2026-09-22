@@ -1,0 +1,14 @@
+{
+  "modules": [
+    "backend:go",
+    "frontend:react",
+    "database:neon",
+    "storage:gcs",
+    "email:twilio",
+    "organizations",
+    "docker"
+  ],
+  "dependencies": {
+    "@google-cloud/storage": "^7.0.0"
+  }
+}
